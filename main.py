@@ -1,18 +1,18 @@
-'''
+"""
 Description: Crawl data twitter using selenium
 
 Authors: Tran Van Phuc,
 
 Date: Fri 15, 2023
 
-'''
+"""
 
 import csv
 from getpass import getpass
 from time import sleep
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import NoSuchElementException
-from selenium.webdriver import Chrome
+from selenium.webdriver import Safari
 
 
 def parseData(post):
@@ -62,21 +62,21 @@ def parseData(post):
 # password = getpass('Enter your password: ')
 userName = 'tranphuc269'
 email = 'phuc260900@gmail.com'
-topic = 'game'
+topic = 'bob'
 password = 'jerrytran97'
 valid = False
-while not (valid):
+while not valid:
     num = input('Approximately how many tweets you want to collect: ')
     if num.isdigit():
         valid = True
 
 # use Chrome as the default browser
-driver = Chrome()
+driver = Safari()
 
 # open twitter
 driver.get('https://twitter.com/i/flow/login')
 driver.maximize_window()
-sleep(35)
+sleep(10)
 
 # enter email and next
 emailAddr = driver.find_element("xpath", '//input[@name="text"]')
@@ -101,13 +101,13 @@ passwords.send_keys(Keys.RETURN)
 # sleep(15)
 
 # search the topic
-sleep(40)
+sleep(10)
 searchLabel = driver.find_element("xpath", '//input[@aria-label="Search query"]')
 searchLabel.send_keys(topic)
 searchLabel.send_keys(Keys.RETURN)
-sleep(30)
+sleep(10)
 driver.find_element("link text", 'Latest').click()
-sleep(30)
+sleep(10)
 
 data = []
 tweet_ids = set()
@@ -120,6 +120,7 @@ while scrolling:
         posts = driver.find_elements("xpath",
                                      '//article[@data-testid="tweet"]')  # read all tweets on the current page and store
         # them as a list
+        print(f'crawl count data : {len(data)}')
         for post in posts[-15:]:
             tweet = parseData(post)  # parse the tweets
             if tweet:
@@ -136,7 +137,7 @@ while scrolling:
         scroll_attempt = 0
         while True:
             driver.execute_script('window.scrollTo(0, document.body.scrollHeight);')
-            sleep(10)
+            sleep(30)
             curr_position = driver.execute_script("return window.pageYOffset;")
             if last_position == curr_position:
                 scroll_attempt += 1
@@ -146,7 +147,7 @@ while scrolling:
                     scrolling = False
                     break
                 else:
-                    sleep(10)  # attempt another scroll
+                    sleep(30)  # attempt another scroll
             else:
                 last_position = curr_position
                 break
