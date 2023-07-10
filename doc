@@ -47,6 +47,27 @@ def check_access(user_id: int, folder_id: int) -> bool:
 
         return access_control is not None
 
+
+def check_access(user_id: int, folder_id: int) -> bool:
+    with Session(engine) as session:
+        query = f"""
+            SELECT *
+            FROM AccessControl
+            WHERE folder_id = {folder_id}
+            AND (
+                user_id = {user_id}
+                OR group_id IN (
+                    SELECT group_id
+                    FROM UserGroup
+                    WHERE user_id = {user_id}
+                )
+            )
+        """
+        result = session.exec(query)
+        access_control = result.fetchone()
+
+        return access_control is not None
+
 def main():
     # Kiểm tra quyền truy cập cho người dùng có user_id = 1 và folder_id = 1
     has_access = check_access(user_id=1, folder_id=1)
