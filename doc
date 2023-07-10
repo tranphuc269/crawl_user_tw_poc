@@ -1,0 +1,56 @@
+from sqlmodel import Field, Relationship, SQLModel
+
+class User(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    username: str
+
+class Group(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    group_name: str
+
+class Folder(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    folder_name: str
+
+class AccessControl(SQLModel, table=True):
+    id: int = Field(default=None, primary_key=True)
+    folder_id: int = Field(foreign_key="folder.id")
+    user_id: int = Field(foreign_key="user.id", nullable=True)
+    group_id: int = Field(foreign_key="group.id", nullable=True)
+    access_type: str
+    folder: Relationship = Relationship(back_populates="access_control")
+    user: Relationship = Relationship(back_populates="access_control")
+    group: Relationship = Relationship(back_populates="access_control")
+±±±±±±±±±
+
+
+from sqlmodel import Session
+
+from db import engine
+from models import User, Folder, AccessControl
+
+def check_access(user_id: int, folder_id: int) -> bool:
+    with Session(engine) as session:
+        access_control = session.exec(
+            select(AccessControl)
+            .where(AccessControl.folder_id == folder_id)
+            .where(
+                or_(
+                    AccessControl.user_id == user_id,
+                    AccessControl.group_id.in_(
+                        select(UserGroup.group_id)
+                        .where(UserGroup.user_id == user_id)
+                    ),
+                )
+            )
+        ).first()
+
+        return access_control is not None
+
+def main():
+    # Kiểm tra quyền truy cập cho người dùng có user_id = 1 và folder_id = 1
+    has_access = check_access(user_id=1, folder_id=1)
+    print(f"Has access: {has_access}")
+
+if __name__ == "__main__":
+    main()

@@ -1,29 +1,17 @@
-from Crypto.Cipher import AES
-import binascii
+from Cryptodome.PublicKey import RSA
 
-# Hàm giải mã AES CBC PKCS5 Padding
-def aes_decrypt(ciphertext, key, iv):
-    cipher = AES.new(key, AES.MODE_CBC, iv)
-    plaintext = cipher.decrypt(ciphertext)
-    return plaintext.rstrip(b"\0")
+# Tạo cặp khóa
+key = RSA.generate(1024)
 
-# Dữ liệu HEX String mã hóa
-encrypted_data_hex = "your_hex_string_here"
+# Lấy khóa riêng
+private_key = key.export_key()
 
-# Key và initialization vector (iv) đã cho trước (dưới dạng HEX String)
-key_hex = "your_key_hex_string_here"
-iv_hex = "your_iv_hex_string_here"
+# Lấy khóa công khai
+public_key = key.publickey().export_key()
 
-# Chuyển đổi dữ liệu HEX String sang dạng bytes
-ciphertext = binascii.unhexlify(encrypted_data_hex)
+# In khóa riêng và khóa công khai
+print("Khóa riêng (Private key):")
+print(private_key.decode())
 
-# Chuyển đổi key và iv từ dạng HEX String sang dạng bytes
-key = binascii.unhexlify(key_hex)
-iv = binascii.unhexlify(iv_hex)
-
-# Giải mã dữ liệu
-plaintext = aes_decrypt(ciphertext, key, iv)
-
-# Hiển thị dữ liệu giải mã dưới dạng chuỗi
-plaintext_str = plaintext.decode("utf-8")
-print("Decrypted data:", plaintext_str)
+print("\nKhóa công khai (Public key):")
+print(public_key.decode())
