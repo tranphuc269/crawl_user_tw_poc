@@ -1,26 +1,29 @@
+from fastapi import FastAPI, UploadFile, File
 from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
 from Crypto.Protocol.KDF import PBKDF2
-from Crypto.Util.Padding import pad, unpad
+from Crypto.Util.Padding import pad
 from minio import Minio
 import tempfile
 import os
+
+app = FastAPI()
 
 # MinIO configuration
 MINIO_ENDPOINT = 'your_minio_endpoint'
 MINIO_ACCESS_KEY = 'your_minio_access_key'
 MINIO_SECRET_KEY = 'your_minio_secret_key'
 MINIO_BUCKET_NAME = 'your_minio_bucket_name'
-ENCRYPTED_FILE_NAME = 'encrypted_file.bin'
-DECRYPTED_FILE_NAME = 'decrypted_file.txt'
 
 # AES encryption parameters
 AES_KEY_SIZE = 32  # AES-256
 SALT_SIZE = 16
 ITERATIONS = 100000
 
-def encrypt_file(input_file, password):
+@app.post("/upload/")
+async def upload_file(file: UploadFile = File(...), password: str = None):
     # Generate a random salt
-    salt = os.urandom(SALT_SIZE)
+    salt = get_random_bytes(SALT_SIZE)
 
     # Derive a key from the password using PBKDF2
     key = PBKDF2(password, salt, dkLen=AES_KEY_SIZE, count=ITERATIONS)
@@ -36,27 +39,40 @@ def encrypt_file(input_file, password):
     temp_file.write(cipher.iv)
 
     # Encrypt the file and write it to the temporary file
-    with open(input_file, 'rb') as file_in:
-        while True:
-            chunk = file_in.read(8192)
-            if not chunk:
-                break
-            elif len(chunk) % AES.block_size != 0:
-                # Pad the chunk to a multiple of the AES block size
-                chunk = pad(chunk, AES.block_size)
-            temp_file.write(cipher.encrypt(chunk))
+    while True:
+        chunk = await file.read(8192)
+        if not chunk:
+            break
+        elif len(chunk) % AES.block_size != 0:
+            # Pad the chunk to a multiple of the AES block size
+            chunk = pad(chunk, AES.block_size)
+        temp_file.write(cipher.encrypt(chunk))
 
     # Close the temporary file
     temp_file.close()
 
-    return temp_file.name
+    # Upload the encrypted file to MinIO
+    minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
+    with open(temp_file.name, 'rb') as file_data:
+        minio_client.put_object(MINIO_BUCKET_NAME, file.filename, file_data)
 
-def decrypt_file(input_file, password):
-    # Create a temporary file to store the decrypted data
+    # Delete the temporary file
+    os.remove(temp_file.name)
+
+    return {"message": "File uploaded successfully."}
+@app.get("/download/{file_name}")
+async def download_file(file_name: str, password: str = None):
+    # Download the encrypted file from MinIO
+    minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
     temp_file = tempfile.NamedTemporaryFile(delete=False)
+    with open(temp_file.name, 'wb') as file_data:
+        file_data.write(minio_client.get_object(MINIO_BUCKET_NAME, file_name).read())
 
-    # Open the input file
-    with open(input_file, 'rb') as file_in:
+    # Create a temporary file to store the decrypted data
+    decrypted_temp_file = tempfile.NamedTemporaryFile(delete=False)
+
+    # Open the input file (encrypted data)
+    with open(temp_file.name, 'rb') as file_in:
         # Read the salt and IV from the input file
         salt = file_in.read(SALT_SIZE)
         iv = file_in.read(AES.block_size)
@@ -76,58 +92,13 @@ def decrypt_file(input_file, password):
             if len(decrypted_chunk) < len(chunk):
                 # Unpad the decrypted chunk if necessary
                 decrypted_chunk = unpad(decrypted_chunk, AES.block_size)
-            temp_file.write(decrypted_chunk)
+            decrypted_temp_file.write(decrypted_chunk)
 
-    # Close the temporary file
+    # Close the temporary files
     temp_file.close()
+    decrypted_temp_file.close()
 
-    return temp_file.name
+    # Delete the encrypted temporary file
+    os.remove(temp_file.name)
 
-def upload_to_minio(file_path, object_name):
-    minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
-
-    try:
-        minio_client.fput_object(MINIO_BUCKET_NAME, object_name, file_path)
-        print(f"File uploaded to MinIO with object name: {object_name}")
-    except Exception as e:
-        print(f"Error uploading file to MinIO: {e}")
-
-def download_from_minio(object_name):
-    minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS_KEY, secret_key=MINIO_SECRET_KEY, secure=False)
-
-    try:
-        # Create a temporary file to store the downloaded data
-        temp_file = tempfile.NamedTemporaryFile(delete=False)
-
-        # Download the object from MinIO and write it to the temporary file
-        minio_client.fget_object(MINIO_BUCKET_NAME, object_name, temp_file.name)
-
-        # Close the temporary file
-        temp_file.close()
-
-        return temp_file.name
-    except Exception as e:
-        print(f"Error downloading file from MinIO: {e}")
-
-if __name__ == "__main__":
-    input_file_path = 'path_to_your_input_file.txt'
-    password = 'your_password_here'
-
-    # Encrypt the file and get the path of the temporary encrypted file
-    encrypted_file_path = encrypt_file(input_file_path, password)
-
-    # Upload the encrypted file to MinIO
-    upload_to_minio(encrypted_file_path, ENCRYPTED_FILE_NAME)
-
-    # Download the encrypted file from MinIO and get the path of the temporary downloaded file
-    downloaded_file_path = download_from_minio(ENCRYPTED_FILE_NAME)
-
-    # Decrypt the file and get the path of the temporary decrypted file
-    decrypted_file_path = decrypt_file(downloaded_file_path, password)
-
-    # Do something with the decrypted file
-
-    # Delete the temporary files
-    os.remove(encrypted_file_path)
-    os.remove(downloaded_file_path)
-    os.remove(decrypted_file_path)
+    return FileResponse(decrypted_temp_file.name, media_type='application/octet-stream', headers={'Content-Disposition': f'attachment; filename="{file_name}"'})
