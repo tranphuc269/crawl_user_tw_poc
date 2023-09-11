@@ -1,28 +1,20 @@
-import base64
+import concurrent.futures
+import requests
 
-def base64_decode_with_padding(base64_string):
-    # Kiểm tra xem chuỗi base64 có độ dài chia hết cho 4 hay không
-    padding_needed = len(base64_string) % 4
-    if padding_needed > 0:
-        base64_string += "=" * (4 - padding_needed)
+# Danh sách các URL bạn muốn yêu cầu
+urls = ["https://example.com/page1", "https://example.com/page2", "https://example.com/page3"]
 
-    # Giải mã chuỗi base64 thành dữ liệu ban đầu
-    try:
-        decoded_data = base64.b64decode(base64_string)
-        return decoded_data
-    except Exception as e:
-        print("Error decoding base64:", e)
-        return None
+def fetch_url(url):
+    response = requests.get(url)
+    if response.status_code == 200:
+        return f"Yêu cầu thành công cho URL: {url}"
+    else:
+        return f"Yêu cầu thất bại cho URL: {url}"
 
-# Chuỗi base64 cần giải mã
-base64_string = "SGVsbG8gV29ybGQh"
+# Sử dụng ThreadPoolExecutor để thực hiện các yêu cầu song song
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    results = list(executor.map(fetch_url, urls))
 
-# Giải mã base64 với xử lý padding
-decoded_data = base64_decode_with_padding(base64_string)
-
-# Chuyển đổi dữ liệu giải mã thành chuỗi (nếu là dữ liệu văn bản)
-if decoded_data:
-    decoded_text = decoded_data.decode('utf-8')
-    print(decoded_text)  # Kết quả: "Hello World!"
-else:
-    print("Invalid base64 string.")
+# In kết quả
+for result in results:
+    print(result)
