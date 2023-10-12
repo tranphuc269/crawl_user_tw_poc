@@ -1,82 +1,38 @@
-from sqlmodel import Field, Relationship, SQLModel
+import java.util.concurrent.*;
 
-class User(SQLModel, table=True):
-    id: int = Field(default=None, primary_key=True)
-    username: str
+public class TimeoutExample {
 
-class Group(SQLModel, table=True):
-    id: int = Field(default=None, primary_key=True)
-    group_name: str
+    public static void main(String[] args) {
+        // Thời gian tối đa (đơn vị là giây)
+        int maxExecutionTime = 5;
 
-class Folder(SQLModel, table=True):
-    id: int = Field(default=None, primary_key=True)
-    folder_name: str
+        // Hàm bạn muốn chạy
+        Callable<String> yourFunction = () -> {
+            // Logic của hàm của bạn ở đây
+            // ...
 
-class AccessControl(SQLModel, table=True):
-    id: int = Field(default=None, primary_key=True)
-    folder_id: int = Field(foreign_key="folder.id")
-    user_id: int = Field(foreign_key="user.id", nullable=True)
-    group_id: int = Field(foreign_key="group.id", nullable=True)
-    access_type: str
-    folder: Relationship = Relationship(back_populates="access_control")
-    user: Relationship = Relationship(back_populates="access_control")
-    group: Relationship = Relationship(back_populates="access_control")
-±±±±±±±±±
+            return "Kết quả của hàm";
+        };
 
+        // Thực thi hàm với thời gian giới hạn
+        String result = executeWithTimeout(yourFunction, maxExecutionTime);
+        System.out.println(result);
+    }
 
-from sqlmodel import Session
+    private static <T> T executeWithTimeout(Callable<T> task, int timeoutInSeconds) {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        Future<T> future = executor.submit(task);
 
-from db import engine
-from models import User, Folder, AccessControl
+        try {
+            return future.get(timeoutInSeconds, TimeUnit.SECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            // Xử lý khi quá thời gian
+            e.printStackTrace();
+        } finally {
+            future.cancel(true); // Hủy task nếu chưa hoàn thành
+            executor.shutdown(); // Đóng executor
+        }
 
-def check_access(user_id: int, folder_id: int) -> bool:
-    with Session(engine) as session:
-        access_control = session.exec(
-            select(AccessControl)
-            .where(AccessControl.folder_id == folder_id)
-            .where(
-                or_(
-                    AccessControl.user_id == user_id,
-                    AccessControl.group_id.in_(
-                        select(UserGroup.group_id)
-                        .where(UserGroup.user_id == user_id)
-                    ),
-                )
-            )
-        ).first()
-
-        return access_control is not None
-
-
-def check_access(user_id: int, folder_id: int) -> bool:
-    with Session(engine) as session:
-        query = f"""
-            SELECT *
-            FROM AccessControl
-            WHERE folder_id = {folder_id}
-            AND (
-                user_id = {user_id}
-                OR group_id IN (
-                    SELECT group_id
-                    FROM UserGroup
-                    WHERE user_id = {user_id}
-                )
-            )
-        """
-        result = session.exec(query)
-        access_control = result.fetchone()
-
-        return access_control is not None
-
-def main():
-    # Kiểm tra quyền truy cập cho người dùng có user_id = 1 và folder_id = 1
-    has_access = check_access(user_id=1, folder_id=1)
-    print(f"Has access: {has_access}")
-
-if __name__ == "__main__":
-    main()
-
-
-#######
-https://www.aserto.com/blog/rbac-vs-rebac
-
+        return null; // Trả về giá trị mặc định nếu quá thời gian
+    }
+}
